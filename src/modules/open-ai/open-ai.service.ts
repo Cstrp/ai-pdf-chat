@@ -15,7 +15,41 @@ export class OpenAiService implements OnModuleInit {
     this.authorize();
   }
 
-  public async createCompletion(vector: PineconeRecord) {}
+  public async createCompletion(
+    prompt: string,
+    ask: string,
+    ctx: PineconeRecord,
+  ): Promise<string | null> {
+    if (!prompt || typeof prompt !== 'string' || !ctx) {
+      throw new Error('Input prompt must be a non-empty string');
+    }
+
+    try {
+      const vector = ctx.values.toString();
+      const model = 'chatgpt-4o-latest';
+
+      const { choices } = await this.openAi.chat.completions.create({
+        model,
+        messages: [
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: vector },
+          { role: 'user', content: ask },
+        ],
+        temperature: 1,
+      });
+
+      const content = choices[0].message.content;
+
+      if (!content || content.toLowerCase().includes('error')) {
+        this.logger.warn(`OpenAI agent returned an error: ${content}`);
+        return null;
+      }
+
+      return content;
+    } catch (error) {
+      this.logger.error(`Error while fetching completion: ${error}`);
+    }
+  }
 
   public async createEmbedding(text: string): Promise<number[]> {
     if (!text || typeof text !== 'string') {
@@ -43,7 +77,7 @@ export class OpenAiService implements OnModuleInit {
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  private authorize() {
+  private authorize(): void {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
 
     if (!apiKey) {
